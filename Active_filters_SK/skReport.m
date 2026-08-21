@@ -25,6 +25,8 @@ for i = 1:numel(F.sections)
             L{end+1} = sprintf('   R = %s ohm,  C = %s F', skFmtSI(s.R), skFmtSI(s.C));
             L{end+1} = sprintf('   target f0 = %s Hz, realized -3 dB = %s Hz (err %.1e)', ...
                 skFmtSI(s.w0t/(2*pi)), skFmtSI(s.w3/(2*pi)), sqrt(s.err));
+            L{end+1} = sprintf('   GBW margin wt/wc = %s%s', skFmtSI(s.margin, ''), ...
+                local_predTag(s));
         case 'sk'
             L{end+1} = sprintf('   R1 = %s ohm,  R2 = %s ohm,  C1 = %s F,  C2 = %s F', ...
                 skFmtSI(s.R1), skFmtSI(s.R2), skFmtSI(s.C1), skFmtSI(s.C2));
@@ -33,7 +35,8 @@ for i = 1:numel(F.sections)
                 100*abs(s.w0a-s.w0t)/s.w0t);
             L{end+1} = sprintf('   Q  target = %.3f -> realized %.3f (%.2f%%)', ...
                 s.Qt, s.Qa, 100*abs(s.Qa-s.Qt)/s.Qt);
-            L{end+1} = sprintf('   GBW margin wt/(w0*Q) = %.1f', F.gbw/(s.w0a*s.Qa));
+            L{end+1} = sprintf('   GBW margin m = wt/(w0*Q) = %s%s', skFmtSI(s.margin, ''), ...
+                local_predTag(s));
         case 'sv'
             c = s.comp;
             L{end+1} = sprintf('   R1=%s R2=%s R3=%s Rf=%s', ...
@@ -49,6 +52,37 @@ for i = 1:numel(F.sections)
             end
             L{end+1} = sprintf('   f0=%s Hz  Q=%.3f  fz=%s Hz  (rel. resp. err %.1e)', ...
                 skFmtSI(s.w0t/(2*pi)), s.Qt, skFmtSI(s.wzt/(2*pi)), sqrt(s.err));
+    end
+end
+
+L{end+1} = '----------------------------------------------------------';
+% GBW pre-distortion summary + low-margin warnings
+if isfinite(F.gbw)
+    nsec = numel(F.sections);
+    npd = sum(arrayfun(@(s) isfield(s, 'pred') && s.pred, F.sections));
+    if npd > 0
+        L{end+1} = sprintf(' GBW pre-distortion: %d of %d sections compensated', npd, nsec);
+    else
+        L{end+1} = sprintf(' GBW pre-distortion: none needed (all margins OK)');
+    end
+    for i = 1:nsec
+        s = F.sections(i);
+        if isfield(s, 'margin') && ~isempty(s.margin) && isfinite(s.margin) && s.margin < 5
+            L{end+1} = sprintf(' WARNING: section %d has a very low GBW margin (m = %.1f);', i, s.margin);
+            L{end+1} = sprintf('          the response will deviate from the ideal prototype even after pre-distortion.');
+        end
+        % realized (w0,Q) deviation of the chosen parts under the real GBW
+        if isfield(s, 'w0a') && ~isempty(s.w0a) && isfinite(s.w0t)
+            if strcmp(s.kind, 'rc')
+                dev = abs(s.w3 - s.w0t)/s.w0t;
+            else
+                dev = max(abs(s.w0a - s.w0t)/s.w0t, abs(s.Qa - s.Qt)/s.Qt);
+            end
+            if dev > 0.05 && ~(isfield(s, 'pred') && s.pred)
+                L{end+1} = sprintf(' WARNING: section %d realized (f0,Q) deviate %.1f%% from target', i, 100*dev);
+                L{end+1} = sprintf('          (no pre-distortion was applied).');
+            end
+        end
     end
 end
 
@@ -70,4 +104,18 @@ L{end+1} = sprintf('   max |H| deviation from ideal prototype: %.3f dB', F.specs
 L{end+1} = '==========================================================';
 
 txt = strjoin(L, newline);
+end
+
+% ======================================================================
+function tag = local_predTag(s)
+% short status tag for the GBW margin line of one section
+if ~isfield(s, 'pred') || isempty(s.pred)
+    tag = '';
+elseif isinf(s.margin)
+    tag = '  (ideal op-amp)';
+elseif s.pred
+    tag = '  [pre-distorted]';
+else
+    tag = '  [no pre-distortion: margin OK]';
+end
 end

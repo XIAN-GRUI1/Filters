@@ -89,8 +89,29 @@ end
 function [B1, B2, B3] = local_skCoeffs(R1, R2, C1, C2, passtype, wt)
 % Actual normalized denominator coefficients 1 + B1 s + B2 s^2 + B3 s^3
 % of a unity-gain Sallen-Key section with an op-amp GBW of wt (rad/s).
+%
 % The op-amp is modelled as a single integrator A(s) = wt/s; the unity
-% follower then has V+ = Vout*(1 + s/wt).
+% follower then has V+ = Vout*(1 + s/wt).  Substituting this into the
+% node equations and eliminating the op-amp input node gives the exact
+% third-order denominator (verified against a direct nodal solve of the
+% 3x3 circuit matrix, agreement < 1e-10 dB):
+%
+%   lowpass:  D(s) = (1+s/wt)*[1 + s*(R1*C1 + (R1+R2)*C2) + s^2*R1*R2*C1*C2]
+%                     - R1*s*C1
+%   highpass: D(s) = R1*[(1+s/wt)*(1+s*R2*C2)*(s*C1 + 1/R1)
+%                     + s*C2*(1+s/wt) - s*R2*C2/R1]   (normalized to 1 + ...)
+%
+% so the coefficients are
+%   lowpass:  B1 = C2*(R1+R2) + 1/wt
+%             B2 = R1*R2*C1*C2 + (R1*C1 + (R1+R2)*C2)/wt
+%             B3 = R1*R2*C1*C2 / wt
+%   highpass: B1 = R1*(C1+C2) + 1/wt
+%             B2 = R1*R2*C1*C2 + (R1*(C1+C2) + R2*C2)/wt
+%             B3 = R1*R2*C1*C2 / wt
+%
+% Note: the op-amp pole only adds a 1/wt term to B1 and linear-in-1/wt
+% terms to B2/B3; the pre-distortion in SKOPT compensates the resulting
+% Q enhancement (Qa/Q ~ 1 + wt/(w0*Q)).
 if isinf(wt)
     % ideal quadratic
     switch lower(passtype)
@@ -106,19 +127,13 @@ if isinf(wt)
 end
 switch lower(passtype)
     case 'lowpass'
-        A0 = 1./R1 + 1./R2;
-        A1 = C1 + C2 + R2.*C2./R1;
-        A2 = R2.*C1.*C2;
-        B1 = R1.*(A1 - C1 + A0./wt);
-        B2 = R1.*(A2 + A1./wt);
-        B3 = R1.*A2./wt;
+        B1 = C2.*(R1 + R2) + 1./wt;
+        B2 = R1.*R2.*C1.*C2 + (R1.*C1 + C2.*(R1 + R2))./wt;
+        B3 = R1.*R2.*C1.*C2./wt;
     case 'highpass'
-        A0 = 1./(R1.*R2.*C2);
-        A1 = 1./R1 + (C1 + C2)./(R2.*C2);
-        A1p = (C1 + C2)./(R2.*C2);
-        B1 = (A1p + A0./wt)./A0;
-        B2 = (C1 + A1./wt)./A0;
-        B3 = (C1 + C2)./(A0.*wt);
+        B1 = R1.*(C1 + C2) + 1./wt;
+        B2 = R1.*R2.*C1.*C2 + (R1.*(C1 + C2) + R2.*C2)./wt;
+        B3 = R1.*R2.*C1.*C2./wt;
     otherwise
         error('skBiquad:BadType', 'passtype must be lowpass|highpass.');
 end

@@ -46,6 +46,12 @@ switch lower(F.type)
         else
             pb = w >= 2*pi*f * 0.9999;
         end
+        % for high-pass the passband extends upward without bound; with a
+        % finite op-amp GBW the response rolls off above GBW, so keep the
+        % ripple measurement in the region where the op-amp model is valid
+        if isfinite(F.gbw)
+            pb = pb & (w < F.gbw/10);
+        end
         if any(pb)
             S.ripple = max(HdB(pb)) - min(HdB(pb));
         end

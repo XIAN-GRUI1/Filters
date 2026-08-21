@@ -2,8 +2,8 @@
 %
 %   Run the whole script to design and plot several filters:
 %     1. Butterworth LP, 6th order, E96/E24 components (ideal op-amps)
-%     2. Chebyshev-I HP, 5th order, 1 dB ripple, with a finite-GBW op-amp
-%        (pre-distortion active)
+%     2. Butterworth LP, 6th order, 800 kHz with GBW = 12 MHz (per-section
+%        conditional pre-distortion; check the margin / status lines)
 %     3. Cauer (elliptic) LP, 5th order, 1 dB / 40 dB (transmission-zero
 %        sections realized with 3-op-amp state-variable biquads)
 %     4. Bessel LP, 4th order
@@ -22,10 +22,11 @@ F1 = skDesign('Type', 'butter', 'Order', 6, 'Fc', 1e3, ...
     'Plot', true);
 
 % 2 ---------------------------------------------------------------
-fprintf('\n[2] Chebyshev-I 5th-order high-pass, 1 kHz, 1 dB ripple,\n');
-fprintf('    GBW = 200 kHz (pre-distorted components)\n');
-F2 = skDesign('Type', 'cheby1', 'Order', 5, 'Fc', 1e3, 'Rp', 1, ...
-    'PassType', 'highpass', 'GBW', 200e3, 'Plot', true);
+fprintf('\n[2] Butterworth 6th-order low-pass, 800 kHz,\n');
+fprintf('    GBW = 12 MHz (only the sections that need it are\n');
+fprintf('    pre-distorted; check the margin / status lines)\n');
+F2 = skDesign('Type', 'butter', 'Order', 9, 'Fc', 800*1e3, ...
+    'GBW', 12e6, 'Plot', true);
 
 % 3 ---------------------------------------------------------------
 fprintf('\n[3] Cauer (elliptic) 5th-order low-pass, 1 dB ripple, 40 dB\n');

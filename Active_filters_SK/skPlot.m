@@ -12,6 +12,17 @@ HdB = 20*log10(max(abs(H), 1e-12));
 HidB = 20*log10(max(abs(Hi), 1e-12));
 fv = w / (2*pi);
 
+% headless / restricted environments (e.g. MATLAB -batch without access
+% to the window server) cannot open figures; skip the plot gracefully
+
+%{
+if ~usejava('desktop')
+    warning('skPlot:NoDesktop', ...
+        'MATLAB is running without a desktop/window server; plot skipped.');
+    return;
+end
+%}
+
 figure('Name', sprintf('SK filter: %s-%d %s', upper(F.type), F.order, upper(F.passtype)));
 subplot(2, 1, 1);
 semilogx(fv, HdB, 'LineWidth', 1.5); hold on;

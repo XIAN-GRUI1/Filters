@@ -1,2 +1,4 @@
 .matlab_sandbox/
 run_matlab.ps1
+Selftest.m
+skDemo.m

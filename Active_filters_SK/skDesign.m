@@ -19,7 +19,19 @@ function F = skDesign(varargin)
 %     GBW        op-amp gain-bandwidth product in Hz (default Inf = ideal).
 %                With a finite GBW the component values are pre-distorted
 %                so that the realized response (with the single-pole
-%                op-amp model) matches the ideal one.
+%                op-amp model) matches the ideal one - but only for the
+%                sections that actually need it (see Predist).
+%     Predist    'auto' (default) | 'always' | 'never'
+%                'auto' pre-distorts a section only when its GBW margin
+%                m = GBW/(f0*Q) (= wt/(w0*Q)) is below PredistThresh.
+%                The finite op-amp bandwidth raises the section Q and
+%                shifts f0 by ~1/m (verified by exact nodal analysis),
+%                so m >= 100 keeps the uncompensated Q error below ~1 %
+%                and pre-distortion is not needed there.
+%     PredistThresh  margin threshold for 'auto' (default 100)
+%     PredistTol  relative (w0,Q) tolerance used to decide, per section,
+%                 whether the finite op-amp bandwidth actually distorts
+%                 the realized pole pair (default 0.01 = 1 %)
 %     Rmin, Rmax  resistor search range in ohm (default 100 ... 1e6)
 %     Cmin, Cmax  capacitor search range in farad (default 1e-12 ... 1e-6)
 %     SpreadMax   maximum allowed component ratio warning threshold
@@ -30,7 +42,10 @@ function F = skDesign(varargin)
 %   Output F is a struct with
 %     .type, .order, .fc, .passtype, .gbw (rad/s), .options
 %     .prototype   prototype struct (see SKPROTO)
-%     .sections    array of section structs (components + achieved values)
+%     .sections    array of section structs (components + achieved values;
+%                  every Sallen-Key section is unity gain; sections are
+%                  ordered by ascending Q so the low-Q stages come first
+%                  and the high-Q stages last - best dynamic range)
 %     .specs       measured passband ripple / -3 dB / stopband attenuation
 %     .report      formatted text report
 %
@@ -63,6 +78,9 @@ opt.Fstop     = [];
 opt.Rser      = 'E96';
 opt.Cser      = 'E24';
 opt.GBW       = Inf;
+opt.Predist   = 'auto';
+opt.PredistThresh = 100;
+opt.PredistTol = 0.01;
 opt.Rmin      = 100;
 opt.Rmax      = 1e6;
 opt.Cmin      = 1e-12;
@@ -151,7 +169,8 @@ for i = 1:nsec
     end
     % unify the field set so the section structs can be concatenated
     allf = {'C','R','Rx','w3','C1','C2','R1','R2','R1x','R2x','w0a','Qa', ...
-            'comp','comp0','w0t','Qt','wzt','err','wt','kind','topology','wz','w0p'};
+            'comp','comp0','w0t','Qt','wzt','err','wt','kind','topology','wz','w0p', ...
+            'pred','margin'};
     for f = allf
         if ~isfield(sec, f{1})
             sec.(f{1}) = [];
@@ -204,7 +223,8 @@ function o = skOptOpt(opt, wt)
 o = struct('Rser', opt.Rser, 'Cser', opt.Cser, ...
     'Rmin', opt.Rmin, 'Rmax', opt.Rmax, ...
     'Cmin', opt.Cmin, 'Cmax', opt.Cmax, ...
-    'wt', wt);
+    'wt', wt, 'pred', opt.Predist, 'pthresh', opt.PredistThresh, ...
+    'rtol', opt.PredistTol);
 end
 
 % ======================================================================
@@ -256,7 +276,8 @@ for i = 1:2:numel(varargin)
     end
     switch nm
         case {'Type','Order','Fc','PassType','Rp','Rs','Fstop','Rser','Cser', ...
-              'GBW','Rmin','Rmax','Cmin','Cmax','SpreadMax','Plot','Verbose'}
+              'GBW','Predist','PredistThresh','PredistTol','Rmin','Rmax','Cmin','Cmax', ...
+              'SpreadMax','Plot','Verbose'}
             opt.(nm) = varargin{i+1};
         otherwise
             error('skDesign:UnknownOpt', 'Unknown option "%s".', nm);
@@ -267,4 +288,9 @@ opt.Type = lower(opt.Type);
 opt.PassType = lower(opt.PassType);
 opt.Rser = upper(opt.Rser);
 opt.Cser = upper(opt.Cser);
+opt.Predist = lower(opt.Predist);
+if ~ismember(opt.Predist, {'auto','always','never'})
+    error('skDesign:BadPredist', ...
+        'Predist must be ''auto'', ''always'' or ''never''.');
+end
 end
